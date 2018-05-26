@@ -29,14 +29,21 @@ void CSMain (uint3 id : SV_DispatchThreadID)
  	float del = _view - _slice;
 	int ix = id.x;
 	int iy = id.y;
+	int ixr = id.x;
+	int iyr = id.y;
     float4 flowF = 256.0 * _FlowF2darray.Load(int4(id.x,id.y,_slice,0));
     float4 flowR = 256.0 * _FlowR2darray.Load(int4(id.x,id.y,_slice,0));
-    float2 fF = float2((flowF.x / 32.0 + (flowF.y-128.0) * 8.0),(flowF.z / 32.0 + (flowF.w -128.0) * 8.0));
-    float2 fR = float2((flowR.x / 32.0 + (flowR.y-128.0) * 8.0),(flowR.z / 32.0 + (flowR.w -128.0) * 8.0));
+    float2 fF = 1.0 * float2((flowF.x / 32.0 + (flowF.y-128.0) * 8.0),(flowF.z / 32.0 + (flowF.w -128.0) * 8.0));
+    float2 fR = 1.0 * float2((flowR.x / 32.0 + (flowR.y-128.0) * 8.0),(flowR.z / 32.0 + (flowR.w -128.0) * 8.0));
 
-	ix += del * fF.x + (1.0-del) * fR.x; // WRONG!
-	iy += del * fF.y + (1.0-del) * fR.y;
+	ix -= del * fF.x;
+	ixr -= (1.0-del) * fR.x; 
+	iy -= del * fF.y;
+	iyr -= (1.0-del) * fR.y;
 
-    Result[uint3(ix,iy,0).xy] = _Views2darray.Load(int4(id.x,id.y,_slice,0));
+	float4 fc = _Views2darray.Load(int4(ix,iy,_slice,0));
+	float4 rc = _Views2darray.Load(int4(ixr,iyr,_slice+1,0));
+
+    Result[id.xy] = (1.0-del) * fc + del * rc;
 //	Result[id.xy] = _FlowF2darray.Load(int4(id.x,id.y,_slice,0));
 }
