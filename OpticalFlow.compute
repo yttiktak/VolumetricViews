@@ -1,0 +1,42 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+RWTexture2D<float4> Result;
+
+Texture2DArray<float4> _FlowF2darray;
+Texture2DArray<float4> _Views2darray;
+
+Texture2DArray<float4> _FlowR2darray;
+
+int _slice = 0;
+float _view = 0;
+
+// handy unpacker : uint l = ui & 0xff; h = ur >> 8
+//    "def modulos(a):\n",
+//    "    xf = a[0]*32;\n",
+//    "    xmsb = math.floor(xf / 256);\n",
+//    "    xlsb = xf - xmsb * 256;\n",
+//    "    yf = a[1]*32;\n",
+//    "    ymsb = math.floor(yf / 256);\n",
+//    "    ylsb = yf - ymsb * 256;\n",
+//    "    return [xlsb,128+xmsb,ylsb,128+ymsb]"
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+// int sln = _slice; // (int)floor(_view);
+    _slice = (int)floor(_view);
+ 	float del = _view - _slice;
+	int ix = id.x;
+	int iy = id.y;
+    float4 flowF = 256.0 * _FlowF2darray.Load(int4(id.x,id.y,_slice,0));
+    float4 flowR = 256.0 * _FlowR2darray.Load(int4(id.x,id.y,_slice,0));
+    float2 fF = float2((flowF.x / 32.0 + (flowF.y-128.0) * 8.0),(flowF.z / 32.0 + (flowF.w -128.0) * 8.0));
+    float2 fR = float2((flowR.x / 32.0 + (flowR.y-128.0) * 8.0),(flowR.z / 32.0 + (flowR.w -128.0) * 8.0));
+
+	ix += del * fF.x + (1.0-del) * fR.x; // WRONG!
+	iy += del * fF.y + (1.0-del) * fR.y;
+
+    Result[uint3(ix,iy,0).xy] = _Views2darray.Load(int4(id.x,id.y,_slice,0));
+//	Result[id.xy] = _FlowF2darray.Load(int4(id.x,id.y,_slice,0));
+}
