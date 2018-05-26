@@ -1,17 +1,15 @@
-﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
 RWTexture2D<float4> Result;
 
 Texture2DArray<float4> _FlowF2darray;
 Texture2DArray<float4> _Views2darray;
-
 Texture2DArray<float4> _FlowR2darray;
 
-int _slice = 0;
 float _view = 0;
 
-// handy unpacker : uint l = ui & 0xff; h = ur >> 8
+// Once format is stable, can use bye shifting to get data, like uint l = ui & 0xff; h = ur >> 8
+// excerpt from the jupyter notebook, packaging a[2] into a png files rgba:
 //    "def modulos(a):\n",
 //    "    xf = a[0]*32;\n",
 //    "    xmsb = math.floor(xf / 256);\n",
@@ -20,30 +18,30 @@ float _view = 0;
 //    "    ymsb = math.floor(yf / 256);\n",
 //    "    ylsb = yf - ymsb * 256;\n",
 //    "    return [xlsb,128+xmsb,ylsb,128+ymsb]"
+// but note somewhere along the line, image went from [0,256] to [0,1.0]
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-// int sln = _slice; // (int)floor(_view);
-    _slice = (int)floor(_view);
- 	float del = _view - _slice;
-	int ix = id.x;
-	int iy = id.y;
-	int ixr = id.x;
-	int iyr = id.y;
-    float4 flowF = 256.0 * _FlowF2darray.Load(int4(id.x,id.y,_slice,0));
-    float4 flowR = 256.0 * _FlowR2darray.Load(int4(id.x,id.y,_slice,0));
-    float2 fF = 1.0 * float2((flowF.x / 32.0 + (flowF.y-128.0) * 8.0),(flowF.z / 32.0 + (flowF.w -128.0) * 8.0));
-    float2 fR = 1.0 * float2((flowR.x / 32.0 + (flowR.y-128.0) * 8.0),(flowR.z / 32.0 + (flowR.w -128.0) * 8.0));
+    int sln = (int)floor(_view);
+    float del = _view - sln;
+    int ix = id.x;
+    int iy = id.y;
+    int ixr = id.x;
+    int iyr = id.y;
+	
+    float4 flowF = _FlowF2darray.Load(int4(id.x,id.y,sln,0));
+    float4 flowR = _FlowR2darray.Load(int4(id.x,id.y,sln,0));
+    float2 fF = float2((flowF.x * 8.0 + (flowF.y-0.5) * 2048.0),(flowF.z *8.0 + (flowF.w -0.5) * 2048.0));
+    float2 fR = float2((flowR.x * 8.0 + (flowR.y-0.5) * 2048.0),(flowR.z * 8.0 + (flowR.w -0.5) * 2048.0));
 
-	ix -= del * fF.x;
-	ixr -= (1.0-del) * fR.x; 
-	iy -= del * fF.y;
-	iyr -= (1.0-del) * fR.y;
+    ix -= del * fF.x;
+    ixr -= (1.0-del) * fR.x; 
+    iy -= del * fF.y;
+    iyr -= (1.0-del) * fR.y;
 
-	float4 fc = _Views2darray.Load(int4(ix,iy,_slice,0));
-	float4 rc = _Views2darray.Load(int4(ixr,iyr,_slice+1,0));
+    float4 fc = _Views2darray.Load(int4(ix,iy,sln,0));
+    float4 rc = _Views2darray.Load(int4(ixr,iyr,sln+1,0));
 
     Result[id.xy] = (1.0-del) * fc + del * rc;
-//	Result[id.xy] = _FlowF2darray.Load(int4(id.x,id.y,_slice,0));
 }
